@@ -6,13 +6,13 @@ output: html_notebook
 # 00_Loading and installing packages
 
 ```{r include=FALSE}
-#install.packages("pacman")
+install.packages("pacman")
 ```
 
 ```{r include=FALSE}
-# library("pacman")
-# 
-# pacman::p_load("readxl", "dplyr", "tidyr", "openxlsx", "FactoMineR", "cluster", "factoextra", "magrittr", "vegan", "ggplot2", "rioja", "psych", "dendroextras", "rcartocolor", "latex2exp", "ggsci", "ggpubr", "corrplot", "viridis", "cowplot", "ggrepel", "janitor", "pheatmap","scatterplot3d", "tidypaleo", "grid", "ggtext", "bruceR", "forcats", "ggthemes", "ggmap", "maps", "reshape2")
+library("pacman")
+
+pacman::p_load("readxl", "dplyr", "tidyr", "openxlsx", "FactoMineR", "cluster", "factoextra", "magrittr", "vegan", "ggplot2", "rioja", "psych", "dendroextras", "rcartocolor", "latex2exp", "ggsci", "ggpubr", "corrplot", "viridis", "cowplot", "ggrepel", "janitor", "pheatmap","scatterplot3d", "tidypaleo", "grid", "ggtext", "bruceR", "forcats", "ggthemes", "ggmap", "maps", "reshape2")
 ```
 
 # Loading data
