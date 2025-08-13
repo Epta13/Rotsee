@@ -1,0 +1,815 @@
+---
+title: R Notebook
+output: html_notebook
+---
+
+# 00_Loading and installing packages
+
+```{r include=FALSE}
+#install.packages("pacman")
+```
+
+```{r include=FALSE}
+# library("pacman")
+# 
+# pacman::p_load("readxl", "dplyr", "tidyr", "openxlsx", "FactoMineR", "cluster", "factoextra", "magrittr", "vegan", "ggplot2", "rioja", "psych", "dendroextras", "rcartocolor", "latex2exp", "ggsci", "ggpubr", "corrplot", "viridis", "cowplot", "ggrepel", "janitor", "pheatmap","scatterplot3d", "tidypaleo", "grid", "ggtext", "bruceR", "forcats", "ggthemes", "ggmap", "maps", "reshape2")
+```
+
+# Loading data
+
+```{r}
+pig_d <- read_excel("~/SourceData/Pig.xlsx", sheet = "pig_area")
+prod <- read_excel("~/SourceData/Pig.xlsx", sheet = "pig_prod")
+
+pig <- select(pig_d, 2:14)
+
+depth <- select(pig_d, 1)
+```
+
+# 02_Pigment data exploration
+
+First we clean up the data. Remove nans or 0. In this case, the sample was measure and so the pigments which were not detected are not NaNs, beacuse we know that they are not in the sample. Thus, all NaNs are now replaced with 0es.
+
+```{r}
+pig_filled <- pig %>% replace(is.na(.), 0) 
+
+pig_d <- pig_d %>% replace(is.na(.), 0)
+
+# Pig_da.nan<-na.omit(pig_da)
+# #pig_filled <- Pig.nan[which(colMeans(=0(Pig.nan)) >= .95)]
+# 
+# remove_high_zero_columns <- function(data) {
+#   # Calculate the proportion of zeros in each column
+#   prop_zeros <- colMeans(data == 0)
+#   # Keep columns with less than or equal to 90% zeros
+#   data[, prop_zeros <= 0.5]
+# }
+# # Remove columns with high zero proportion
+# Pig_da.clean <- as.data.frame(remove_high_zero_columns(Pig_da.nan))
+# 
+# pig_filled <- select(Pig_da.clean, 3:22)
+```
+
+## K-means clustering
+
+deciding on the number of clusters, with the elbow method
+
+```{r}
+fviz_nbclust(pig_filled, kmeans, method = "wss")
+```
+
+Plotting the selected number of clusters on top of the plot
+
+```{r}
+# To save the plot, you can uncomment the first and the last line of this section 
+#png(filename = "No_clusters_K-means.png", width = 500, height = 500, units = "px", pointsize = 12) 
+
+fviz_nbclust(pig_filled, kmeans, method = "wss") + geom_vline(xintercept = 3, linetype = 2)+ 
+  #here you can add the number of clusters to be shown in with a line 
+  labs(subtitle = "Elbow method")
+#dev.off()
+```
+
+### K-means clustering
+
+```{r}
+#make this example reproducible 
+set.seed(100) 
+#perform k-means clustering with k = 5 clusters 
+km <- kmeans(pig_filled, centers = 3, nstart = 25) 
+
+#plot results of final k-means model 
+
+#To save the plot, you can uncomment the first and the last line of this section 
+#png(filename = "K-means_clusters.png", width = 500, height = 500, units = "px", pointsize = 12) 
+fviz_cluster(km, data = pig_filled) 
+#dev.off()
+```
+
+```{r}
+#LR 
+cluster_assignments <- km$cluster 
+df_clustered <- bind_cols(pig_d, cluster_assignments) 
+colnames(df_clustered)[15] <- 'K_means_cluster' #this may need to be changed depending on the number of pigments
+```
+
+## Hierarchical unconstrained clustering
+
+Standardizing the data for clustering
+
+```{r}
+data <- as.matrix(pig_filled) 
+# Standardise data for CLUSTER analysis, z-scoring
+data_standardized <- data 
+for(i in 1:ncol(data_standardized) ) {
+  data_standardized[ , i] <- data_standardized[,i]/sd(data_standardized[,i]) 
+  }
+```
+
+```{r}
+# Compute hierarchical clustering 
+res.hc <- data_standardized %>% scale() %>% 
+# Scale the data 
+dist(method = "euclidean") %>% 
+  # Compute dissimilarity matrix 
+  hclust(method = "ward.D2")
+# Compute hierachical clustering
+```
+
+Visualize the clusters using dendrogram
+
+```{r}
+# Visualize using factoextra 
+# Cut in x groups and color by groups 
+
+#To save the plot, you can uncomment the first and the last line of this section 
+# png(filename = "~/work/holzmaar/figs/Pigments_Hclust_dendrogram.png", width = 800, height = 500, units = "px", pointsize = 12) 
+
+fviz_dend(res.hc, k = 3, # Cut in four groups 
+          cex = 0.5, # label size 
+          k_colors = c("#2E9FDF", "#00AFBB", "#E7B800", "#FC4E07","#6e57d2" ), color_labels_by_k = TRUE, # color labels by groups 
+          rect = TRUE # Add rectangle around groups 
+          )
+# dev.off()
+```
+
+Save the clusters to your dataset
+
+```{r}
+#LR 
+clust <- hclust(dist(data_standardized, method="euclidean"), method="ward.D2") 
+clustercut<-cbind(1:23,cutree(clust,3)) #fill in the number of observations (rows) and number of clusters acooriding to the dendrogram 
+df_clustered <- bind_cols(df_clustered, clustercut) 
+colnames(df_clustered)[16] <- 'order' # change the column number based on your dataset size 
+colnames(df_clustered)[17] <- 'Hcluster' # change the column number based on your dataset size
+```
+
+## Hierarchical constrained clustering CONISS
+
+Standardize data before CONISS clustering
+
+```{r}
+data <- as.matrix(pig_filled) 
+# Standardise data for CLUSTER analysis 
+data_standardized <- data 
+for(i in 1:ncol(data_standardized) ) { 
+  data_standardized[ , i] <- data_standardized[,i]/sd(data_standardized[,i]) 
+  }
+```
+
+### Compute hierarchical clustering
+
+```{r}
+bstick(chclust(dist(data_standardized, method="euclidean"), method="coniss"), 15)
+```
+
+### Cluster
+
+```{r}
+#Dendrogram classic 
+clust <- chclust(dist(data_standardized, method="euclidean"), method="coniss") 
+#plot(clust, hang=-1, horiz=FALSE, x.rev=TRUE, cex= 0.8)
+
+```
+
+### Visualize dendrogram
+
+```{r}
+plot(clust, hang=-1, horiz=FALSE, x.rev=TRUE, cex= 0.8) 
+# Number of clusters 
+k <- 3
+groups <- cutree(clust, k=k) 
+rect.hclust(clust, k=k, border="red") 
+box(lty="solid")
+data.clust<-cbind(data,groups) 
+t <- as.data.frame(groups)
+
+```
+
+```{r}
+# Visualize using factoextra 
+# Cut in 4 groups and color by groups 
+#quartz() 
+
+#To save the plot, you can uncomment the first and the last line of this section 
+# png(filename = "~/work/holzmaar/figs/Pigments_CONISS_dendrogram.png", width = 800, height = 500, units = "px", pointsize = 12) 
+
+fviz_dend(clust, k = 3, # Cut in four groups 
+          cex = 0.5, # label size 
+          k_colors = c("#2E9FDF", "#00AFBB", "#E7B800", "#FC4E07","#6e57d2", "yellow", "green", "black"), color_labels_by_k = TRUE, # color labels by groups 
+          rect = TRUE # Add rectangle around groups 
+          )
+
+# dev.off()
+```
+
+Save the clusters to your dataset
+
+```{r}
+#pigment data 
+cluster <- chclust(dist(data_standardized, method="euclidean"), method="coniss") 
+clustercut<-cbind(1:23,cutree(cluster,3)) 
+df_clustered <- bind_cols(df_clustered, clustercut) 
+colnames(df_clustered)[18] <- 'orderCONISS' 
+colnames(df_clustered)[19] <- 'CONISScluster'
+```
+
+Get the file with assigned clusters for further plotting
+
+```{r}
+# Get a table with the content of each cluster 
+#write.table(clustercut, "Pig_unconstrained_table_with_clusters_3.txt", sep="\t") # 
+# write.xlsx(HR_cluster_all, "data/HR_all_clustered.xlsx", rowNames = FALSE) 
+#low resolution
+write.xlsx(df_clustered, "~/Pig_clustered.xlsx", rowNames = FALSE, col_type ="numeric")
+```
+
+# 03_Principle component analysis
+
+The next step in exploring our XRF data we perform principle component analysis to reduce the dimensionality of the dataset and to explore the correlation and variance of our variables. In the first step we aim to keep the covariance of the variables, this, we do not perform further data standardization (e.g., applying z-score normalization) as our data are already normalized via clr.
+
+Load the XRF data
+
+```{r}
+PCA_pig <- read_excel("~/Pig_clustered.xlsx")
+
+data <- select(PCA_pig, 2:14)
+```
+
+## ALR: Transforming pigment data - Additive log ratio
+
+As compositional data are unidirectional, means that they have values between 0 and infinite, for statistical operations, we first need to tranform the data. For this we use alr.
+
+In this way, we can then conduct PCA or clustering without worrying that our PCA axes will be affected by the unidirectional data character.
+
+```{r}
+# Function to replace zeros with half of minimum non-zero value
+replace_zeros <- function(x) {
+  min_value <- min(x[x != 0])  # Find minimum non-zero value
+  if (is.na(min_value)) min_value <- 0  # Handle case with all zeros
+  x[x == 0] <- min_value / 1000  # Replace zeros with one thousendth of minimum
+  return(x)
+}
+
+# Apply the function to each column of the data frame - replacing 0es
+data <- as.data.frame(sapply(data, replace_zeros))
+```
+
+```{r}
+# prep <- function(x) {
+#   # Calculate the alr
+#   norm <- x / (10^6 - x) # we uses 10^6 because our units are ug/g
+#   # Normalize each value
+# }
+# 
+# prep_data <- as.data.frame(apply(data, 1, prep))
+trans_data <- as.data.frame(t(data))
+alr <- log(trans_data)
+
+alr_safe<- bind_cols("depth" = PCA_pig$`Composite depth`, t(alr))
+
+write.xlsx(alr_safe, "~/pig_alr.xlsx", rowNames = FALSE, col_type ="numeric")
+```
+
+## Perform PCA - alr data
+
+We perform the PCA on the alr normalized dataset and display the percentage of explained variance by each of the PC axis.
+
+```{r}
+detach("package:factoextra", unload = TRUE)
+detach("package:FactoMineR", unload = TRUE)
+library("FactoMineR")
+library("factoextra")
+res.pca <- PCA(t(alr), graph = F, scale.unit = F)
+var <- get_pca_var(res.pca)
+get_eig(res.pca)
+fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 65))
+```
+
+We see that most of the data variance is explained by the first PC (49%) followed by the PC2 explaining 16% of the data variance. To be able to interpret our data and decrease the dimensionality by selection representative variable for a certain phenomenon or trend, we visualize the data in a bi-plot figure. We already added preliminary interpretations based on expert knowledge.
+
+### Plot PCA bi-plot
+
+-   Positively correlated variables are grouped together.
+
+-   Negatively correlated variables are positioned on opposite sides of the plot origin (opposed quadrants).
+
+-   The distance between variables and the origin measures the quality of the variables on the factor map. Variables that are away from the origin are well represented on the factor map.
+
+```{r}
+#png(filename = /home/rstudio/work/holzmaar/data/fig/Figure1A.png, width = 680, height = 680, units = px, pointsize = 14, res=120)
+
+# autochtonous <- text_grob(Autochtonous, size=13, face=bold, color= lightblue)
+# allochtonous <- text_grob(Allochtonous, size=13, face=bold, color= lightblue)
+# Organic <- text_grob(Organic matter\nand redox, size=13, face=bold, color= grey,rot = 90)
+# Mineral <- text_grob(Minerals, size=13, face=bold, color= grey, rot=90)
+
+#PCA_clr <-
+  fviz_pca_var(res.pca, col.var="contrib", axes = c(1,2), clip = ("off"),
+             gradient.cols = c("darkred", "orange", "forestgreen"),
+             repel = TRUE, title = " ")#+
+        #theme(plot.margin = unit(c(1,1,2,1), lines)) +
+          # annotation_custom(allochtonous,xmin=-0.4,xmax=-0.4,ymin=-0.7,ymax=-0.7) + 
+          # annotation_custom(autochtonous,xmin=0.7,xmax=0.7,ymin=-0.7,ymax=-0.7) +
+          # annotation_custom(Organic,xmin=-0.7, xmax=-0.7,ymin=0.4,ymax=0.4) + 
+          # annotation_custom(Mineral,xmin=-0.7,xmax=-0.7,ymin=-0.4,ymax=-0.4)
+  #coord_cartesian(clip = off)
+
+#dev.off()
+```
+
+### Correlation of the variables with the principle components
+
+We can further explore the correlation of the variable with the PC axis to get better understanding of what variables are exploring each axis.
+
+```{r}
+corrplot(var$cor, is.corr=FALSE)
+```
+
+### Plot the variables contribution to PCx
+
+Further to statistically constrain/explore the contribution of the variable to the PC axis we plot the PC axis histograms.
+
+#### Contributions of variables to PC1
+
+```{r}
+fviz_contrib(res.pca, choice = "var", axes = 1, top = 12)
+```
+
+#### Contributions of variables to PC2
+
+```{r}
+fviz_contrib(res.pca, choice = "var", axes = 2, top = 10)
+```
+
+#### Contributions of variables to PC3
+
+```{r}
+fviz_contrib(res.pca, choice ="var", axes = 3, top = 10)
+```
+
+## PCA on alr and z-scored
+
+Even though our variables are unit less and were normalized in the way that they are ratios (clr), in the previous PCA we observe that certain variables are dominant compare to others. Thus, some of the relationships of the less represented variables are not clearly visible. To resolve this overpowering effect of the few dominant variables and the make the variables comparable, we scale the data using the z-score approach (standardizing by the standard deviation of the dataset).
+
+```{r}
+res.pca_scaled <- PCA(t(alr),  graph = FALSE, scale = 1) # in case one wants to scale the data using z-score
+varS<- get_pca_var(res.pca_scaled)
+get_eig(res.pca_scaled)
+#png(filename = XRF_HSI_PCA_explanatory_power.png, width = 800, height = 500, units = px, pointsize = 12)
+fviz_screeplot(res.pca_scaled, addlabels = TRUE, ylim = c(0, 55))
+```
+
+We can see that the PC1 axis has now lower percentage of the explained variances (42%), which brought more explained variance to the PC2 (18). In this way we get more explanatory power on PC2 which means for us that we can identify more than the one dominant process explaining the data variance (as it was in the first PCA of non-scaled data). Thus, we get more explanatory PCA when z-scoring the data which helps to our data interpretation.
+
+### PCA on scaled data
+
+-   Positively correlated variables are grouped together.
+
+-   Negatively correlated variables are positioned on opposite sides of the plot origin (opposed quadrants).
+
+-   The distance between variables and the origin measures the quality of the variables on the factor map. Variables that are away from the origin are well represented on the factor map.
+
+```{r}
+# autochtonous <- text_grob(Autochtonous, size=13, face=bold, color= lightblue)
+# allochtonous <- text_grob(Allochtonous, size=13, face=bold, color= lightblue)
+# Organic <- text_grob(Organic matter\nand redox, size=13, face=bold, color= grey,rot = 90)
+# Mineral <- text_grob(Minerals, size=13, face=bold, color= grey, rot=90)
+
+#PCA_clr_scaled <- 
+  fviz_pca_var(res.pca_scaled, col.var="contrib", axes = c(1,2), 
+             gradient.cols = c("darkred", "orange", "forestgreen"),
+             repel = TRUE, title = "" )+
+   theme(plot.margin = unit(c(0.1,8,0.1,2), "lines")) +
+          # annotation_custom(autochtonous,xmin=-.5,xmax=-0.5,ymin=-1,ymax=-1) + 
+          # annotation_custom(allochtonous,xmin=0.5,xmax=0.5,ymin=-1,ymax=-1) +
+          # annotation_custom(Organic,xmin=-1, xmax=-1,ymin=0.7,ymax=0.7) + 
+          # annotation_custom(Mineral,xmin=-1,xmax=-1,ymin=-0.5,ymax=-0.5)+
+  coord_cartesian(clip = "off")
+
+
+```
+
+### Correlation of the variables with the principle components - scaled
+
+```{r}
+corrplot(varS$cor, is.corr=FALSE)
+```
+
+### Plot the variables contribution to PCx
+
+#### Contributions of variables to PC1
+
+```{r}
+fviz_contrib(res.pca_scaled, choice = "var", axes = 1, top = 15)
+```
+
+#### Contributions of variables to PC2
+
+```{r}
+fviz_contrib(res.pca_scaled, choice = "var", axes = 2, top = 10)
+```
+
+#### Contributions of variables to PC3
+
+```{r}
+fviz_contrib(res.pca_scaled, choice = "var", axes = 3, top = 10)
+```
+
+## PCA on alr data with hierarchical unconstrained clusters
+
+For further data exploration and explanation we combine the results of clustering with the PCA bi-plots. In this way, we see what the important variables defining the specific lithotypes (the clusters).
+
+```{r}
+res.pca <- prcomp(t(alr), scale =F)
+#res.pca <- PCA(df, scale = 0)
+#var <- get_pca_var(res.pca)
+#get_eig(res.pca)
+
+# autochtonous <- text_grob(Autochtonous, size=13, face=bold, color= lightblue)
+# allochtonous <- text_grob(Allochtonous, size=13, face=bold, color= lightblue) 
+# Organic <- text_grob(Organic matter\nand redox, size=13, face=bold, color= grey,rot = 90) 
+# Mineral <- text_grob(Minerals, size=13, face=bold, color= grey, rot=90) 
+
+
+b_clr <- fviz_pca_biplot(res.pca, label="var", axes = c(1,2), repel = TRUE, 
+                     title =" " , col.var = "black", #xlab = PC1 (55.3%), ylab=PC2 (10.2%),
+                     alpha.var = 1, alpha.ind = 0.5, habillage=PCA_pig$Hcluster,
+               addEllipses=TRUE, ellipse.level=0.95, ellipse.alpha = 0.2) +
+  labs(color = "Clusters", shape ="Clusters", fill = "Clusters")+
+  # annotation_custom(autochtonous,xmin=-3,xmax=-3,ymin=-4,ymax=-4) + 
+  # annotation_custom(allochtonous,xmin=3,xmax=3,ymin=-4,ymax=-4) + 
+  # annotation_custom(Organic,xmin=-5, xmax=-5,ymin=-2,ymax=-2) + 
+  # annotation_custom(Mineral,xmin=-5,xmax=-5,ymin=3,ymax=3)+
+  theme(plot.margin = unit(c(0.1,8,0.1,2), "lines"))#+
+   #coord_cartesian(xlim = c(-5, 5), ylim = c(-4, 4), clip = "off")
+
+b_clr + scale_color_viridis_d(option ="H") + 
+  scale_fill_viridis_d(option = "H")+
+     theme_minimal()
+```
+
+## PCA on alr z-scored data with hierarchical unconstrained clusters
+
+```{r}
+res.pca_scaled <- prcomp(t(alr), scale =T)
+
+# autochtonous <- text_grob(Autochtonous, size=13, face=bold, color= lightblue)
+# allochtonous <- text_grob(Allochtonous, size=13, face=bold, color= lightblue) 
+# Organic <- text_grob(Organic matter\nand redox, size=13, face=bold, color= grey,rot = 90) 
+# Mineral <- text_grob(Minerals, size=13, face=bold, color= grey, rot=90) 
+
+
+b_z <- fviz_pca_biplot(res.pca_scaled, label="var", axes = c(1,2), repel = TRUE, 
+                     title =" " , col.var = "black", #xlab = PC1 (45.3%), ylab=PC2 (11.5%),
+                     alpha.var = 1, alpha.ind = 0.5, habillage=PCA_pig$Hcluster,
+               #cluster_CONISS, #K_means_cluster, Hcluster
+               addEllipses=TRUE, ellipse.level=0.95, ellipse.alpha = 0.2) +
+  labs(color = "Clusters", shape ="Clusters", fill = "Clusters")+
+  # annotation_custom(autochtonous,xmin=-5,xmax=-5,ymin=-6,ymax=-6) + 
+  # annotation_custom(allochtonous,xmin=5,xmax=5,ymin=-6,ymax=-6) + 
+  # annotation_custom(Organic,xmin=-8, xmax=-8,ymin=-4,ymax=-4) + 
+  # annotation_custom(Mineral,xmin=-8,xmax=-8,ymin=4,ymax=4)+
+  theme(plot.margin = unit(c(0.1,8,0.1,2), "lines"))#+
+  #coord_cartesian(xlim = c(-8, 8), ylim = c(-6, 6), clip = "off")
+
+b_z + scale_color_viridis_d(option ="H") + 
+  scale_fill_viridis_d(option = "H")+
+     theme_minimal()
+
+
+```
+
+Extracting the 4 PCs
+
+One the PCA axis are well explored and the phenomena responsible to the data variation are explained, the PCA axis can be used as the reduced dataset replacing the original variables when representing the given/selected phenomena. Thus, we extract the PC axis scores and save them along with our data for further plotting or data analysis.
+
+```{r}
+#summary(res.pca)
+res.pca <- prcomp(t(alr), scale. =T, rank. = 4) #center = T,
+summary(res.pca)
+```
+
+Attaching the PC scores to the dataset
+
+```{r}
+# Extract principal component scores (first two components)
+pc_scores <- res.pca$x  # Selects columns 1 and 2 for the first two PCs
+
+# Extract loadings for all principal components
+pc_loadings <- res.pca$rotation
+
+df_PC <- bind_cols(PCA_pig, pc_scores)
+
+write.xlsx(df_PC, "~/Pig_clustered_PC.xlsx", rowNames = FALSE, col_type ="numeric")
+```
+
+## Trajectory plots
+
+The sedimentary data can be preceived as time-series data as the process of settlement is happening though time. Thus, while using the CONISS clustering, which groups the sediment data with respect to the depth/time variable, the PC axis can be used to plot the data and be able to track the chronological development of the variables represented by the PC scores. These plots are here called trajectory and they represent the evolution of the sediment composition though depth/time.
+
+```{r}
+# df_PC <- read.xlsx("~/Pig_clustered_PC.xlsx")
+# depth_m <- as.data.frame(df_PC$`Composite depth`)
+
+# df_PC <- df_PC%>% mutate(PZn = case_when(PolZ == "Pleniglacial" ~ "1",
+#                            PolZ == "Bølling" ~ "2",
+#                            PolZ == "Allerød" ~ "3",
+#                            PolZ == "YoungerDryas" ~ "4")
+#    )
+```
+
+```{r}
+# #plot(df_PC$PC1, df_PC$PC2, type= l, text = df_PC$comp_depth_mm)
+# End <- df_PC %>% # last trading day
+#   slice_max(df_PC$Composite.depth)
+#  
+# Start <- df_PC %>% # first trading day
+#   slice_min(df_PC$Composite.depth)
+#   #slice(which.min(depth_m))
+# 
+# 
+# s <- ggplot(df_PC, aes(PC1, PC2)) + 
+#   geom_point(aes(colour = factor(PZn),  shape = factor(PZn), alpha = 0.3))+
+#   labs(alpha = "Trajectory")+
+#  #geom_line()
+#   geom_path(alpha=0.3, col = "black", arrow = arrow(type = "closed", length = unit(0.25, "inches"), ends = "first")) +
+#   labs(colour = "PZn", shape = "PZn") +
+# # last trading day - round mark, annotation below
+#   geom_point(data = Start, aes(x = PC1, y = PC2), col = "green", shape = 21, fill = "green", size = 2, stroke = 1.7) +
+#   geom_text(data = Start, aes(x = PC1, y = PC2, label = sprintf("%0.0f", round(Start$comp_depth_mm, digits = 0))), size = 4, vjust = 2.5) +
+#   # first trading day - round mark, annotation above
+#   geom_point(data = End, aes(x = PC1, y = PC2), col = "red", shape = 21, fill = "red", size = 2, stroke = 1.7) +
+#   geom_text(data = End, aes(x = PC1, y = PC2, label = sprintf("%0.0f", round(End$comp_depth_mm, digits = 0))), size = 4, face= "bold", vjust = -1.5)
+# 
+# #png(filename = /home/rstudio/work/holzmaar/data/fig/Figure1C.png, width = 680, height = 600, units = px, pointsize = 14, res=120)
+# 
+# traj <- s + scale_color_brewer(palette="Dark2", labels = c("Younger Dryas", "Allerød", "Bølling-Allerød", "Pleniglacial"))+
+#   scale_shape_discrete(labels = c("Younger Dryas", "Allerød", "Bølling-Allerød", "Pleniglacial")) +#Paired
+#      theme_minimal()+
+#   # annotation_custom(autochtonous,xmin=-4,xmax=-4,ymin=-6,ymax=-6) + 
+#   # annotation_custom(allochtonous,xmin=5,xmax=5,ymin=-6,ymax=-6) + 
+#   # annotation_custom(Organic,xmin=-7, xmax=-7,ymin=-3,ymax=-3) + 
+#   # annotation_custom(Mineral,xmin=-7,xmax=-7,ymin=5,ymax=5)+
+#  # theme(plot.margin = unit(c(0.1,8,0.1,2), lines))+
+#   coord_cartesian(xlim = c(-10, 10), ylim = c(-8, 8), clip = "off")
+# 
+# #dev.off()
+# traj
+```
+
+PCAs are not really explanatory, thus we try to apply multidimensional scaling (MDS) instead and correlation matrix or heat maps can be better approach.
+
+# 04_MDS
+
+```{r}
+# mds_pig <- cmdscale(dist(alr), k=3)
+# mds_df <- as.data.frame(mds_pig)
+# df_PC <- bind_cols(df_PC, mds_df)
+```
+
+```{r}
+# plot(mds_pig[, 1], mds_pig[, 2])
+# points(mds_pig[, 1], mds_pig[, 2], pch =21, bg = df_PC$Hcluster)# here the color of the datapoints can be changed to show any of the made clusterings or the pollen zones
+```
+
+For the MSD visualization and interpretability, we use the pollen zones as the shape and color of our datapoints.
+
+```{r}
+# ggscatter(df_PC, x = "V1", y = "V2",
+#           color = "PZn", shape = "PZn", fill = "PZn",
+#           palette = "jco",
+#           size = 3,
+#           ellipse = TRUE,
+#           ellipse.type = "convex",
+#           title = " ",
+#           xlab = "MDS Dimension 1",
+#           ylab = "MDS Dimension 2") +
+#     labs(color = "Pollen Zones", shape ="Pollen Zones", fill = "Pollen Zones") +
+#   scale_color_discrete(name = 'Pollen Zones', labels = c("Pleniglacial","Bølling","Allerød","Younder Dryas"))+
+#   scale_fill_discrete(name = 'Pollen Zones', labels = c("Pleniglacial","Bølling","Allerød","Younder Dryas"))+
+#   scale_shape_discrete(name = 'Pollen Zones', labels = c("Pleniglacial","Bølling","Allerød","Younder Dryas"))
+#   #geom_text_repel(aes(label = species), box.padding = 0.5)
+```
+
+The MDS showed us that the Pleniglacial data are different than the Bölling-Alleröd and Younger Dryas data. Likely we don't have sufficent number of data in the Younger Dryas to see whether the lake pigment composition returns to the same communities as in the Pleniglacial.
+
+```{r}
+# colors <- c("red", "blue", "pink")
+# colors <- colors[as.numeric(df_PC$PZn)]
+# scatterplot3d(mds_pig[,1:3], pch = 16,
+#               xlab = "",
+#               ylab = "",
+#               zlab = "",
+#               color=colors)
+```
+
+# 05_Non-metric multidimensional scaling (NMDS)
+
+Non-metric Multidimensional Scaling (NMDS) is a great tool for ecologists to understand community assemblages and identify their influencing factors. We use a data frame/matrix with relative abundances of different pigments in different time periods. Each pigment abundance in the time is an axis and each axis is a dimension. NMDS summarise all of that information into a 2-dimensional representation, showing the differences in pigment community composition. It tries to represent the original position of a community within a multidimensional space as accurately as possible while also minimising the number of dimensions to easily plot and visualise.
+
+## Relative abundance of pigments (%)
+
+Converting the absolute concentrations of pigments to relative %.
+
+```{r}
+# community <- df_PC[,2:22]
+# commper <- adorn_percentages(community, denominator = "row", na.rm = TRUE, 2:21)
+# comPer <- commper[2:21]*100
+```
+
+Transforming the data frame into a matrix and performing the NMDS.
+
+```{r}
+
+# ComMatrix <- as.matrix(comPer)
+# 
+# inv.NMDS <- metaMDS(ComMatrix, distance = "bray", k = 3, autotransform = TRUE, trymax=100)
+# 
+# # check stress value
+# inv.NMDS$stress # ideally stress value is < 0.2
+# 
+# plot(inv.NMDS)
+# 
+# #ordiplot(inv.NMDS, type = "n") # create blank ordination plot
+# orditorp(inv.NMDS, display = "species", col="red", air = 0.4) # add species (orders in this case) names in red
+# orditorp(inv.NMDS, display = "sites", cex = 1.25, air = 0.4) # add site numbers in black
+```
+
+The result plot shows 2 dimensions and each dot represents a different sample in time and each cross represents pigment. The closer 2 points are, the more similar those communities are in terms of composition.
+
+```{r}
+# #png("~/work/holzmaar/figs/NMDS.png", width=6, height=5, units = "in", res = 300)
+# ordiplot(inv.NMDS) # plot shows communities (circles) and species (crosses)
+# orditorp(inv.NMDS, display = "species", col="red", air = 0.4)
+# orditorp(inv.NMDS, display = "sites", cex = 0.7, air = 0.4)
+# ordiellipse(inv.NMDS, df_PC$PZn, label = FALSE,
+#             col=c("dodgerblue", "tomato2", "tomato4", "deepskyblue"),
+#             draw = "polygon", alpha=120) # adding ellipses to the plot, grouping by distance (inverts$Distance)
+# legend("topleft", title="Pollen Zone", c("Pleniglacial","Bølling","Allerød","Younger Dryas"), 
+#        fill=c("dodgerblue", "tomato2", "tomato4",
+#                                    "deepskyblue"), horiz=FALSE, cex=.9) # adding a legend
+# #dev.off()
+```
+
+```{r}
+# nmds.scores <- as.data.frame(scores(inv.NMDS)$sites)
+# 
+# nmds.scores <- nmds.scores %>%
+#   mutate(Time = as.factor(df_PC$PZn))
+# 
+# 
+# # create ggplot
+# (inv_NMDS_plot <- ggplot(data = nmds.scores, aes(NMDS1, NMDS2)) +
+# # adding different colours and shapes for points at different distances
+#     geom_point(aes(color = Time, shape = Time)) + 
+# # adding covariance ellipses according to distance # use size argument if ggplot2 < v. 3.4.0
+#    # geom_path(data=nmds.scores, aes(x=NMDS1, y=NMDS2, colour=Time), linewidth=1) + 
+# # removes lines from legend
+#     guides(color = guide_legend(override.aes = list(linetype=c(NA,NA,NA,NA)))) +
+#     theme_bw() + 
+#     theme(panel.grid = element_blank()) +
+# # legend title
+#     scale_color_manual(name = "Pollen Zone", 
+#     # adjusting legend labels and colour
+#             labels = c("Pleniglacial","Bølling","Allerød","Younger Dryas"), 
+#             values = c("dodgerblue", "tomato2", "tomato4", "deepskyblue")) + 
+#     scale_shape_manual("Pollen Zone", 
+#             labels = c("Pleniglacial","Bølling","Allerød","Younger Dryas"), 
+#             values = c(17, 15, 3, 7))) # customising shapes
+# # save plot
+# #ggsave(filename = "~/work/holzmaar/figs/NMDSPaths.png", inv_NMDS_plot, device = "png")
+```
+
+Similarly to the MDS, we get information about the big difference of the Pleniglacial communities compared to the rest of the Late-Glacial periods.
+
+# 06_Correlation based heatmaps
+
+To best present the pigment data, we need to decrees their dimensionality. We tried to use PCA, where we saw groups of pigments representing the community composition, but to visualize these communities on a time axis, we opt for correlation based heat maps.
+
+```{r}
+pig_prod <- read_excel("~/SourceData/Pig.xlsx", sheet = "pig_prod")
+pig_prod_df <- as.data.frame(pig_prod)
+rownames(pig_prod_df) <- pig_prod_df[,2]
+pig_prod_df
+
+col_names <- pig_prod_df[,2]
+```
+
+In case the scirpt starts here, we load all the data from the code above
+
+```{r}
+df_PC <- read.xlsx("~/Pig_clustered_PC.xlsx")
+depth_m <- as.data.frame(df_PC$Composite.depth)
+
+# df_PC <- df_PC%>% mutate(PZn = case_when(PolZ == "Pleniglacial" ~ "1",
+#                            PolZ == "Bølling" ~ "2",
+#                            PolZ == "Allerød" ~ "3",
+#                            PolZ == "YoungerDryas" ~ "4")
+#    )
+```
+
+```{r}
+alr_safe <- read.xlsx("~/pig_alr.xlsx")
+```
+
+```{r}
+pig_prod_df <- pig_prod_df[,-1]
+annotation_col = pig_prod_df[2]
+```
+
+```{r}
+# depth_mat <- as.data.frame(select(df_PC,1, 23, 2))
+# 
+# rownames(depth_mat) <- depth_mat[,1]
+# depth_mat <- depth_mat[,-1]
+# annotation_row = depth_mat[1]
+```
+
+```{r}
+new_names <- alr_safe[,1]
+
+alr_mat <- as.matrix(alr_safe[,2:14])
+rownames(alr_mat) <- new_names
+colnames(alr_mat) <- col_names
+
+alr_scaled<- scale(alr_mat)
+```
+
+In case one doesn't want to run the hear maps on the alr scaled data, here is the matrix of the raw peak areas
+
+```{r}
+pig_filled_ID <- as.matrix(pig_filled)
+rownames(pig_filled_ID) <- new_names
+colnames(pig_filled_ID) <- col_names
+```
+
+```{r}
+ann_colors = list(
+   producer = c(Cryptophytes = "darkorange3", Cyanobacteria ="royalblue2", `Green algae` = "green4", # `Green sulphur bacteria` = "greenyellow", `Purple non-sulphur bacteria`= "orchid2", `Purple sulphur bacteria` = "purple2", `Red blooming algae` = "red4", 
+                Silicifiers= "lightskyblue"))#,
+#     PolZ = c(Pleniglacial = "dodgerblue", Bølling = "tomato2", Allerød = "tomato4", `YoungerDryas` = "deepskyblue")) #`Lachersee tephra` = "gray29"
+#   #  GeneClass = c(Path1 = "#7570B3", Path2 = "#E7298A", Path3 = "#66A61E")
+# # , 
+
+#Both dimension clustering
+png(filename = "~/figs/heatmap_corr_clustered.png", width = 1200, height = 800, units = "px", pointsize = 18)
+pheatmap(alr_scaled, show_rownames=T,show_colnames=T,
+         annotation_col= annotation_col, #annotation_row = annotation_row,
+         annotation_colors = ann_colors,
+         scale = "none",clustering_method="ward.D2", #cluster_rows = F,
+         clustering_distance_cols="correlation", clustering_distance_rows = "euclidean",
+         cutree_rows = 3,
+         cutree_cols = 4, treeheight_row = 50,
+         treeheight_col = 50, color = colorRampPalette(c("lightskyblue1","darkseagreen1","lightgreen","yellow", "orange", "red", "purple"))(15))
+dev.off()
+
+# Only pigment clustering
+png(filename = "~/figs/Heatmap_corr.png", width = 1200, height = 800, units = "px", pointsize = 18)
+obj <- pheatmap(alr_scaled, show_rownames=T,show_colnames=T,
+         annotation_col=annotation_col, #nnotation_row = annotation_row,
+         annotation_colors = ann_colors,
+         scale = "none", #clustering_method="ward.D2",
+         cluster_rows = F,
+         clustering_distance_cols="euclidean", #clustering_distance_rows = "euclidean",
+        # cutree_rows = 5,
+         cutree_cols = 3, #treeheight_row = 50,
+         treeheight_col = 50, color = colorRampPalette(c("lightskyblue1","darkseagreen1","lightgreen","yellow", "orange", "red", "purple"))(15))
+dev.off()
+```
+
+Extract the clusters, make mean curve and use for a line plot
+
+```{r}
+obj$tree_row
+obj$tree_col
+PigClust <- cutree(obj$tree_col, k = 3) #fill in the number of observations (rows) and number of clusters acooriding to the dendrogram 
+# df_clustered <- bind_cols(df_clustered, clustercut) 
+# colnames(df_clustered)[29] <- 'order' # change the column number based on your dataset size 
+# colnames(df_clustered)[30] <- 'Hcluster' # change the column number based on your dataset size
+
+PigClust <- as.data.frame(t(PigClust))
+
+alr_scaled <- as.data.frame(alr_scaled)
+alr_scaledB<- rbind("PigClust" = PigClust , alr_scaled)
+```
+
+```{r}
+df1 <- as.data.frame(t(alr_scaledB))
+
+selection1 <- as.data.frame(t(df1[df1$PigClust == "1", ]))
+selection2 <- as.data.frame(t(df1[df1$PigClust == "2", ]))
+selection3 <- as.data.frame(t(df1[df1$PigClust == "3", ]))
+```
+
+```{r}
+alr_scaled$C1 <- rowMeans(selection1[2:24,])
+alr_scaled$C2 <- rowMeans(selection2[2:24,])
+alr_scaled$C3 <- rowMeans(selection3[2:24,])
+
+
+alr_scaled_clust<- bind_cols("depth" = PCA_pig$`Composite depth`, #"age" = PCA_pig$mean_VT22 
+                             alr_scaled)
+
+write.xlsx(alr_scaled_clust, "~/pig_alr_clust.xlsx", rowNames = FALSE, col_type ="numeric")
+```
