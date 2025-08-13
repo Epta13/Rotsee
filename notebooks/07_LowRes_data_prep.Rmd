@@ -6,20 +6,20 @@ output: html_notebook
 # 00_Loading and installing packages
 
 ```{r include=FALSE}
-#install.packages("pacman")
+install.packages("pacman")
 ```
 
 ```{r include=FALSE}
-# library("pacman")
-# 
-# pacman::p_load("readxl", "dplyr", "tidyr", "openxlsx", "FactoMineR", "cluster", "factoextra", "magrittr", "vegan", "ggplot2", "rioja", "psych", "dendroextras", "rcartocolor", "latex2exp", "ggsci", "ggpubr", "corrplot", "viridis", "cowplot", "ggrepel", "janitor", "pheatmap","scatterplot3d", "tidypaleo", "grid", "ggtext", "bruceR", "forcats", "ggthemes", "ggmap", "maps", "reshape2")
+library("pacman")
+
+pacman::p_load("readxl", "dplyr", "tidyr", "openxlsx", "FactoMineR", "cluster", "factoextra", "magrittr", "vegan", "ggplot2", "rioja", "psych", "dendroextras", "rcartocolor", "latex2exp", "ggsci", "ggpubr", "corrplot", "viridis", "cowplot", "ggrepel", "janitor", "pheatmap","scatterplot3d", "tidypaleo", "grid", "ggtext", "bruceR", "forcats", "ggthemes", "ggmap", "maps", "reshape2")
 ```
 
-# Loading data
+## Loading data
 
 ```{r}
-pig_d <- read_excel("~/SourceData/Pig.xlsx", sheet = "pig_area")
-prod <- read_excel("~/SourceData/Pig.xlsx", sheet = "pig_prod")
+pig_d <- read_excel("~/work/Rotsee/SourceData/Pig.xlsx", sheet = "pig_area")
+prod <- read_excel("~/work/Rotsee/SourceData/Pig.xlsx", sheet = "pig_prod")
 
 pig <- select(pig_d, 2:14)
 
@@ -221,7 +221,7 @@ Get the file with assigned clusters for further plotting
 #write.table(clustercut, "Pig_unconstrained_table_with_clusters_3.txt", sep="\t") # 
 # write.xlsx(HR_cluster_all, "data/HR_all_clustered.xlsx", rowNames = FALSE) 
 #low resolution
-write.xlsx(df_clustered, "~/Pig_clustered.xlsx", rowNames = FALSE, col_type ="numeric")
+write.xlsx(df_clustered, "~/work/Rotsee/data/Pig_clustered.xlsx", rowNames = FALSE, col_type ="numeric")
 ```
 
 # 03_Principle component analysis
@@ -231,7 +231,7 @@ The next step in exploring our XRF data we perform principle component analysis 
 Load the XRF data
 
 ```{r}
-PCA_pig <- read_excel("~/Pig_clustered.xlsx")
+PCA_pig <- read_excel("~/work/Rotsee/data/Pig_clustered.xlsx")
 
 data <- select(PCA_pig, 2:14)
 ```
@@ -268,7 +268,7 @@ alr <- log(trans_data)
 
 alr_safe<- bind_cols("depth" = PCA_pig$`Composite depth`, t(alr))
 
-write.xlsx(alr_safe, "~/pig_alr.xlsx", rowNames = FALSE, col_type ="numeric")
+write.xlsx(alr_safe, "~/work/Rotsee/data/pig_alr.xlsx", rowNames = FALSE, col_type ="numeric")
 ```
 
 ## Perform PCA - alr data
@@ -501,7 +501,7 @@ pc_loadings <- res.pca$rotation
 
 df_PC <- bind_cols(PCA_pig, pc_scores)
 
-write.xlsx(df_PC, "~/Pig_clustered_PC.xlsx", rowNames = FALSE, col_type ="numeric")
+write.xlsx(df_PC, "~/work/Rotsee/data/Pig_clustered_PC.xlsx", rowNames = FALSE, col_type ="numeric")
 ```
 
 ## Trajectory plots
@@ -688,7 +688,7 @@ Similarly to the MDS, we get information about the big difference of the Plenigl
 To best present the pigment data, we need to decrees their dimensionality. We tried to use PCA, where we saw groups of pigments representing the community composition, but to visualize these communities on a time axis, we opt for correlation based heat maps.
 
 ```{r}
-pig_prod <- read_excel("~/SourceData/Pig.xlsx", sheet = "pig_prod")
+pig_prod <- read_excel("~/work/Rotsee/SourceData/Pig.xlsx", sheet = "pig_prod")
 pig_prod_df <- as.data.frame(pig_prod)
 rownames(pig_prod_df) <- pig_prod_df[,2]
 pig_prod_df
@@ -699,7 +699,7 @@ col_names <- pig_prod_df[,2]
 In case the scirpt starts here, we load all the data from the code above
 
 ```{r}
-df_PC <- read.xlsx("~/Pig_clustered_PC.xlsx")
+df_PC <- read.xlsx("~/work/Rotsee/data/Pig_clustered_PC.xlsx")
 depth_m <- as.data.frame(df_PC$Composite.depth)
 
 # df_PC <- df_PC%>% mutate(PZn = case_when(PolZ == "Pleniglacial" ~ "1",
@@ -710,7 +710,7 @@ depth_m <- as.data.frame(df_PC$Composite.depth)
 ```
 
 ```{r}
-alr_safe <- read.xlsx("~/pig_alr.xlsx")
+alr_safe <- read.xlsx("~/work/Rotsee/data/pig_alr.xlsx")
 ```
 
 ```{r}
@@ -753,7 +753,7 @@ ann_colors = list(
 # # , 
 
 #Both dimension clustering
-png(filename = "~/figs/heatmap_corr_clustered.png", width = 1200, height = 800, units = "px", pointsize = 18)
+png(filename = "~/work/Rotsee/figs/heatmap_corr_clustered.png", width = 1200, height = 800, units = "px", pointsize = 18)
 pheatmap(alr_scaled, show_rownames=T,show_colnames=T,
          annotation_col= annotation_col, #annotation_row = annotation_row,
          annotation_colors = ann_colors,
@@ -765,7 +765,7 @@ pheatmap(alr_scaled, show_rownames=T,show_colnames=T,
 dev.off()
 
 # Only pigment clustering
-png(filename = "~/figs/Heatmap_corr.png", width = 1200, height = 800, units = "px", pointsize = 18)
+png(filename = "~/work/Rotsee/figs/Heatmap_corr.png", width = 1200, height = 800, units = "px", pointsize = 18)
 obj <- pheatmap(alr_scaled, show_rownames=T,show_colnames=T,
          annotation_col=annotation_col, #nnotation_row = annotation_row,
          annotation_colors = ann_colors,
@@ -811,5 +811,5 @@ alr_scaled$C3 <- rowMeans(selection3[2:24,])
 alr_scaled_clust<- bind_cols("depth" = PCA_pig$`Composite depth`, #"age" = PCA_pig$mean_VT22 
                              alr_scaled)
 
-write.xlsx(alr_scaled_clust, "~/pig_alr_clust.xlsx", rowNames = FALSE, col_type ="numeric")
+write.xlsx(alr_scaled_clust, "~/work/Rotsee/data/pig_alr_clust.xlsx", rowNames = FALSE, col_type ="numeric")
 ```
