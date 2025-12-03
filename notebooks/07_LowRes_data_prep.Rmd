@@ -24,6 +24,92 @@ prod <- read_excel("~/work/Rotsee/SourceData/Pig.xlsx", sheet = "pig_prod")
 pig <- select(pig_d, 2:14)
 
 depth <- select(pig_d, 1)
+age_cal_BP <- c(1488.36058,
+1518.45241,
+2280.74828,
+3520.67438,
+3611.3975,
+3712.96865,
+4076.280138,
+4278.72729,
+4588.20471,
+9146.92427,
+9260.94182,
+9320.22903,
+9387.26553,
+10851.95724,
+10936.15955,
+10981.93488,
+11102.07098,
+11205.75678,
+11822.04628,
+12091.54648,
+12241.56838,
+12366.72061,
+12525.37838)
+
+pig_age <-cbind(pig_d, age_cal_BP)
+
+```
+
+```{r}
+#linear interpolation age depth 
+Pb_Cs_14C_age <- read.csv("~/work/Rotsee/SourceData/Pb_Cs_14C_mean_age_sd_240327.csv", sep = ";")
+
+#reference age model depth 
+
+ref_depth <- c(as.numeric(Pb_Cs_14C_age$depth_cm)) #valores de referencia para a idade
+
+age_model_age <- c(as.numeric(Pb_Cs_14C_age$mean_age))#valores de referencia para a vari?vel
+
+
+#Rowwise Linear interpolation ages for downcore record 
+
+
+pig.InterPol_Age <- data.frame(matrix(nrow =23, ncol =2)) 
+
+for (i in 1:nrow(depth)) 
+{
+  pig.InterPol_Age[i,] <- as.numeric(approx(ref_depth, age_model_age, xout=depth[i,]), method = "linear")
+}
+
+colnames(pig.InterPol_Age) <- c("XRF_TrueSurface", "age_linearInterPol")
+
+#round to whole numbers for plotting 
+
+pig.InterPol_Age.round <- as.data.frame(round(pig.InterPol_Age$age_linearInterPol, digits = 0))
+
+colnames(pig.InterPol_Age.round) <- c("age_linearInterPol")
+
+row.names(pig_age) <- pig.InterPol_Age.round$age_linearInterPol
+
+pig_age$age <-  pig.InterPol_Age.round$age_linearInterPol
+```
+
+```{r}
+PollenZPig <- data.frame("age_beg" = c(12900,9800,7800,4588.20471, 2300,  200), "age_to" = c(11700,8800,5900,3453.02185,1300,0), zone = c("Younger Dryas", "HTM1", "HTM2", "AP1", "AP2","AP3"))
+
+PollenZPig <- PollenZPig %>% mutate(color= case_when(zone == "Younger Dryas" ~ "skyblue",
+                           zone == "HTM1" ~ "goldenrod1",
+                           zone == "HTM2" ~ "goldenrod1", 
+                            zone == "AP1" ~ "darkolivegreen", 
+                           zone == "AP2" ~ "darkolivegreen", 
+                           zone == "AP3" ~ "darkolivegreen"))
+
+pig_age <- pig_age %>% mutate(Zone = case_when(age > 11700 ~ "Younger Dryas",
+                          age  <=  9800 & age  >= 8800  ~ "HTM1",
+                          age  <= 7800 & age  >= 5900  ~ "HTM2", 
+                          age <= 4588.20471 & age  >= 3453.02185 ~ "AP1",
+                           age <= 2300 & age  >= 1300 ~ "AP2",
+                           age <= 200 & age  >= 0 ~ "AP3"))
+
+pig_age <- pig_age %>% mutate(color= case_when(Zone == "Younger Dryas" ~ "skyblue",
+                           Zone == "HTM1" ~ "goldenrod1",
+                           Zone == "HTM2" ~ "goldenrod1", 
+                            Zone == "AP1" ~ "darkolivegreen", 
+                           Zone == "AP2" ~ "darkolivegreen", 
+                           Zone == "AP3" ~ "darkolivegreen"))
+
 ```
 
 # 02_Pigment data exploration
@@ -226,7 +312,7 @@ write.xlsx(df_clustered, "~/work/Rotsee/data/Pig_clustered.xlsx", rowNames = FAL
 
 # 03_Principle component analysis
 
-The next step in exploring our XRF data we perform principle component analysis to reduce the dimensionality of the dataset and to explore the correlation and variance of our variables. In the first step we aim to keep the covariance of the variables, this, we do not perform further data standardization (e.g., applying z-score normalization) as our data are already normalized via clr.
+The next step in exploring our pigment data we perform principle component analysis to reduce the dimensionality of the dataset and to explore the correlation and variance of our variables. In the first step we aim to keep the covariance of the variables, this, we do not perform further data standardization (e.g., applying z-score normalization) as our data are already normalized via clr.
 
 Load the XRF data
 
@@ -266,7 +352,7 @@ data <- as.data.frame(sapply(data, replace_zeros))
 trans_data <- as.data.frame(t(data))
 alr <- log(trans_data)
 
-alr_safe<- bind_cols("depth" = PCA_pig$`Composite depth`, t(alr))
+alr_safe<- bind_cols("depth" = PCA_pig$`Composite depth`, t(alr),"age"= pig_age$age, "Zone" = pig_age$Zone, "color" = pig_age$color)
 
 write.xlsx(alr_safe, "~/work/Rotsee/data/pig_alr.xlsx", rowNames = FALSE, col_type ="numeric")
 ```
@@ -499,7 +585,7 @@ pc_scores <- res.pca$x  # Selects columns 1 and 2 for the first two PCs
 # Extract loadings for all principal components
 pc_loadings <- res.pca$rotation
 
-df_PC <- bind_cols(PCA_pig, pc_scores)
+df_PC <- bind_cols(PCA_pig, pc_scores, "age" = pig_age$age, "Zone"= pig_age$Zone)
 
 write.xlsx(df_PC, "~/work/Rotsee/data/Pig_clustered_PC.xlsx", rowNames = FALSE, col_type ="numeric")
 ```
@@ -702,15 +788,18 @@ In case the scirpt starts here, we load all the data from the code above
 df_PC <- read.xlsx("~/work/Rotsee/data/Pig_clustered_PC.xlsx")
 depth_m <- as.data.frame(df_PC$Composite.depth)
 
-# df_PC <- df_PC%>% mutate(PZn = case_when(PolZ == "Pleniglacial" ~ "1",
-#                            PolZ == "Bølling" ~ "2",
-#                            PolZ == "Allerød" ~ "3",
-#                            PolZ == "YoungerDryas" ~ "4")
-#    )
+
+# df_PC <- df_PC%>% mutate(Zone = case_when(PolZ == "Pleniglacial" ~ "1",
+# #                             PolZ == "Bølling" ~ "2",
+# #                             PolZ == "Allerød" ~ "3",   
+# #                             PolZ == "YoungerDryas" ~ "4")   )
 ```
 
 ```{r}
 alr_safe <- read.xlsx("~/work/Rotsee/data/pig_alr.xlsx")
+
+alr_safe$Zone <- alr_safe$Zone %>% replace(is.na(.), "Holocene")
+
 ```
 
 ```{r}
@@ -719,15 +808,17 @@ annotation_col = pig_prod_df[2]
 ```
 
 ```{r}
-# depth_mat <- as.data.frame(select(df_PC,1, 23, 2))
-# 
-# rownames(depth_mat) <- depth_mat[,1]
-# depth_mat <- depth_mat[,-1]
-# annotation_row = depth_mat[1]
+age_mat <- as.data.frame(select(alr_safe,1, 15, 16))
+#age_mat[3,3] <- "Holocene2"
+#age_mat[9,3] <- "Holocene1"
+
+rownames(age_mat) <- age_mat[,2]
+age_mat <- age_mat[,-1]
+annotation_row = age_mat[2]
 ```
 
 ```{r}
-new_names <- alr_safe[,1]
+new_names <- alr_safe[,15]
 
 alr_mat <- as.matrix(alr_safe[,2:14])
 rownames(alr_mat) <- new_names
@@ -746,11 +837,12 @@ colnames(pig_filled_ID) <- col_names
 
 ```{r}
 ann_colors = list(
-   producer = c(Cryptophytes = "darkorange3", Cyanobacteria ="royalblue2", `Green algae` = "green4", # `Green sulphur bacteria` = "greenyellow", `Purple non-sulphur bacteria`= "orchid2", `Purple sulphur bacteria` = "purple2", `Red blooming algae` = "red4", 
-                Silicifiers= "lightskyblue"))#,
-#     PolZ = c(Pleniglacial = "dodgerblue", Bølling = "tomato2", Allerød = "tomato4", `YoungerDryas` = "deepskyblue")) #`Lachersee tephra` = "gray29"
-#   #  GeneClass = c(Path1 = "#7570B3", Path2 = "#E7298A", Path3 = "#66A61E")
-# # , 
+   producer = c(Cryptophytes = "darkorange3", Cyanobacteria ="royalblue2", `Green algae` = "green4", Silicifiers= "lightskyblue"), Zone = c(`Younger Dryas` = "skyblue", Holocene = "white", HTM1 = "goldenrod1", #Holocene1 = "white", #HTM2 = "goldenrod1", 
+AP1 = "darkolivegreen",#Holocene2 = "white", 
+AP2 = "darkolivegreen") #AP3 = "darkolivegreen")
+   ) #`Lachersee tephra` = "gray29"
+  #  GeneClass = c(Path1 = "#7570B3", Path2 = "#E7298A", Path3 = "#66A61E")
+# ,
 
 #Both dimension clustering
 png(filename = "~/work/Rotsee/figs/heatmap_corr_clustered.png", width = 1200, height = 800, units = "px", pointsize = 18)
@@ -765,15 +857,14 @@ pheatmap(alr_scaled, show_rownames=T,show_colnames=T,
 dev.off()
 
 # Only pigment clustering
-png(filename = "~/work/Rotsee/figs/Heatmap_corr.png", width = 1200, height = 800, units = "px", pointsize = 18)
+png(filename = "~/work/Rotsee/figs/Heatmap_corr_2.png", width = 1200, height = 800, units = "px", pointsize = 18)
 obj <- pheatmap(alr_scaled, show_rownames=T,show_colnames=T,
-         annotation_col=annotation_col, #nnotation_row = annotation_row,
+         annotation_col=annotation_col, annotation_row = annotation_row,
          annotation_colors = ann_colors,
-         scale = "none", #clustering_method="ward.D2",
+         scale = "none",
          cluster_rows = F,
-         clustering_distance_cols="euclidean", #clustering_distance_rows = "euclidean",
-        # cutree_rows = 5,
-         cutree_cols = 3, #treeheight_row = 50,
+         clustering_distance_cols="correlation",
+         cutree_cols = 5,
          treeheight_col = 50, color = colorRampPalette(c("lightskyblue1","darkseagreen1","lightgreen","yellow", "orange", "red", "purple"))(15))
 dev.off()
 ```
