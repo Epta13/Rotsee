@@ -847,7 +847,7 @@ AP2 = "darkolivegreen") #AP3 = "darkolivegreen")
 #Both dimension clustering
 png(filename = "~/work/Rotsee/figs/heatmap_corr_clustered.png", width = 1200, height = 800, units = "px", pointsize = 18)
 pheatmap(alr_scaled, show_rownames=T,show_colnames=T,
-         annotation_col= annotation_col, #annotation_row = annotation_row,
+         annotation_col= annotation_col, annotation_row = annotation_row,
          annotation_colors = ann_colors,
          scale = "none",clustering_method="ward.D2", #cluster_rows = F,
          clustering_distance_cols="correlation", clustering_distance_rows = "euclidean",
